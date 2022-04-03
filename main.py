@@ -4,13 +4,8 @@ import math
 import sys
 
 
-all_splits = []  # A list of all the splits (attribute and threshold) that happens within the ideal decision tree
-all_age = []  # A list of all the ages in the given csv data
-all_height = []  # A list of all the heights in the given csv data
-all_tail = []  # A list of all the tail lengths in the given csv data
-all_hair = []  # A list of all the hair lengths in the given csv data
-all_bang = []  # A list of all the bang lengths in the given csv data
-all_reach = []  # A list of all the reaches in the given csv data
+all_splits = [[]] * 10  # A list of all the splits (attribute and threshold) that happens within the ideal decision tree
+attr_array = [[]] * 6  # A list of lists of all the attributes that are relevant for the given data
 
 
 # This function will determine the entropy of a set of records.
@@ -60,6 +55,10 @@ def cal_entropy(set_of_records):
 #
 # argument 1 (set_of_records) - the set of records that we need to analyze
 def more_class(set_of_records):
+    # If there are no records in the list, we exit
+    if len(set_of_records) == 0:
+        return 0
+
     assam = 0
     bhutan = 0
     for a_record in set_of_records:
@@ -83,6 +82,10 @@ def more_class(set_of_records):
 #
 # argument 1 (set_of_records) - the set of records that we need to analyze
 def more_percent(set_of_records):
+    # If there are no records in the list, we exit
+    if len(set_of_records) == 0:
+        return 0
+
     assam = 0
     bhutan = 0
     for a_record in set_of_records:
@@ -107,36 +110,79 @@ def more_percent(set_of_records):
 # argument 1 (the_records) - the set of records that we need to analyze and gather info from
 # argument 2 (depth) - the depth of the current node out of the entire decision tree
 def best_split(the_records, depth):
-    # major_class = more_class(the_records)
-    major_percent = more_percent(the_records)
-    # if depth > 10 or len(the_records) < 9 or major_percent > 0.95:
-    #     return major_class
-    # else:
-    #     best_attribute = 0
-    #     best_threshold = min(all_age)
-    #     best_entropy = 1
-    best_threshold = min(all_age)
-    current_threshold = min(all_age)
-    best_entropy = 1
-    while current_threshold <= max(all_age):
-        node1 = []
-        node2 = []
-        for a_record in the_records:
-            if a_record[0] <= current_threshold:
-                node1.append(a_record)
-            else:
-                node2.append(a_record)
+    major_class = more_class(the_records)  # The class that appears more frequently in the records
+    major_percent = more_percent(the_records)  # The percentage of the major_class
 
-        wei_entropy = ((len(node1) / len(the_records)) * cal_entropy(node1)) + ((len(node2) / len(the_records))
-                                                                                * cal_entropy(node2))
+    # If the decision tree is greater than 10 levels, or there are less than 9 records, or if the percentage
+    # of the majority class is greater than 95 percent, we will stop splitting
+    if depth > 9 or len(the_records) < 9 or major_percent > 0.95:
+        return major_class
+    else:
+        best_attribute = 0  # We initialize the best attribute to be the age
+        best_threshold = min(attr_array[0])  # We initialize the best attribute to be the min threshold of age
+        best_entropy = 1  # We initialize the best weighted entropy to be the worst possible
+        list_counter = 0  # We use this counter to determine the index belonging to the current attribute
 
-        if wei_entropy < best_entropy:
-            best_entropy = wei_entropy
-            best_threshold = current_threshold
+        # For each attribute list in the global array
+        for attr_list in attr_array:
+            local_best_ent = 1  # We initialize the best entropy for this attribute
+            local_best_thr = min(attr_list)  # We initialize the best threshold
+            current_threshold = min(attr_list)  # We keep track of the current threshold
 
-        current_threshold += 1
+            # We go over every possible threshold for the attribute list
+            while current_threshold <= max(attr_list):
+                node1 = []
+                node2 = []
+                for a_record in the_records:
+                    # If the attribute of the record is less than or equal to the test threshold, it
+                    # will go into the first list
+                    if a_record[list_counter] <= current_threshold:
+                        node1.append(a_record)
+                    else:
+                        node2.append(a_record)
 
-    all_splits.append(['Age', best_threshold])
+                # The weighted entropy = (length of first list / total records) x entropy of first list +
+                # (length of second list / total records) x entropy of second list)
+                wei_entropy = ((len(node1) / len(the_records)) * cal_entropy(node1)) + ((len(node2) / len(the_records))
+                                                                                        * cal_entropy(node2))
+
+                # If the weighted entropy of this threshold is better than the previous best, we
+                # update the appropriate values to reflect this
+                if wei_entropy < local_best_ent:
+                    local_best_ent = wei_entropy
+                    local_best_thr = current_threshold
+
+                current_threshold += 1  # Test new threshold
+
+            # If the best entropy of the current attribute is better than the global entropy, we
+            # update the appropriate values to reflect this
+            if local_best_ent < best_entropy:
+                best_attribute = list_counter
+                best_threshold = local_best_thr
+                best_entropy = local_best_ent
+
+            list_counter += 1  # Update new attribute index
+
+    split1 = []  # The list of records in the first split
+    split2 = []  # The list of records in the second split
+
+    # We append each record to either the first or second split according to the best attribute and
+    # its best threshold
+    for test_record in the_records:
+        if test_record[best_attribute] <= best_threshold:
+            split1.append(test_record)
+        else:
+            split2.append(test_record)
+
+    # We append the best attribute, threshold, and the class that appears the most to the global list
+    # for the classifier program
+    if not all_splits[depth]:
+        all_splits[depth] = [[best_attribute, best_threshold, major_class]]
+    else:
+        all_splits[depth].append([best_attribute, best_threshold, major_class])
+
+    best_split(split1, depth + 1)  # Perform a recursive call using the first split and an increased depth
+    best_split(split2, depth + 1)  # Perform a recursive call using the second split and an increased depth
 
 
 # This function will build a trained program (a python file called 'HW05_Classifier_Hu.py') which will
@@ -174,7 +220,7 @@ def write_trained_program():
     mentee_program.write("\n")
     mentee_program.write("                    # If the normalized age is less than the number specified, it will "
                          "belong in the Assam class\n")
-    mentee_program.write("                    if rounded_num <= " + str(all_splits[0][1]) + ":\n")
+    mentee_program.write("                    if rounded_num <= " + str(all_splits[0][0][1]) + ":\n")
     mentee_program.write("                        row.append('+1')\n")
     mentee_program.write("                        write_data.writerow(row)\n")
     mentee_program.write("\n")
@@ -207,45 +253,70 @@ if __name__ == '__main__':
                 read_data = csv.reader(csv_file)
                 read_data.__next__()  # We ignore the headers
                 records = []  # A list of all the records in the training data set
-                all_splits = []  # Initialize the global list of splits to an empty array
-                all_age = []  # Initialize the global list of ages to an empty array
-                all_height = []  # Initialize the global list of heights to an empty array
-                all_tail = []  # Initialize the global list of tail lengths to an empty array
-                all_hair = []  # Initialize the global list of hair lengths to an empty array
-                all_bang = []  # Initialize the global list of bang lengths to an empty array
-                all_reach = []  # Initialize the global list of reaches to an empty array
+                all_splits = [[]] * 10  # Initialize the global list of splits to an empty array
+                attr_array = [[]] * 6  # Initialize all arrays to an empty array
 
                 # Add each value of a record to a local list
                 for record in read_data:
                     # We normalize each age by rounding them to the nearest 2 years
                     the_float = float(record[0].strip())
                     norm_age = round(the_float / 2) * 2
-                    all_age.append(norm_age)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[0]:
+                        attr_array[0] = [norm_age]
+                    else:
+                        attr_array[0].append(norm_age)
 
                     # We normalize each height by rounding them to the nearest 4 centimeters
                     the_float = float(record[1].strip())
                     norm_height = round(the_float / 4) * 4
-                    all_height.append(norm_height)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[1]:
+                        attr_array[1] = [norm_height]
+                    else:
+                        attr_array[1].append(norm_height)
 
                     # We normalize each tail length by rounding them to the nearest 2 units
                     the_float = float(record[2].strip())
                     norm_tail = round(the_float / 2) * 2
-                    all_tail.append(norm_tail)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[1]:
+                        attr_array[2] = [norm_tail]
+                    else:
+                        attr_array[2].append(norm_tail)
 
                     # We normalize each hair length by rounding them to the nearest 2 units
                     the_float = float(record[3].strip())
                     norm_hair = round(the_float / 2) * 2
-                    all_hair.append(norm_hair)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[1]:
+                        attr_array[3] = [norm_hair]
+                    else:
+                        attr_array[3].append(norm_hair)
 
                     # We normalize each bang length by rounding them to the nearest 2 units
                     the_float = float(record[4].strip())
                     norm_bang = round(the_float / 2) * 2
-                    all_bang.append(norm_bang)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[1]:
+                        attr_array[4] = [norm_bang]
+                    else:
+                        attr_array[4].append(norm_bang)
 
                     # We normalize each reach by rounding them to the nearest 2 units
                     the_float = float(record[5].strip())
                     norm_reach = round(the_float / 2) * 2
-                    all_reach.append(norm_reach)  # Add the normalized value to the global list
+
+                    # Add the normalized value to the appropriate index of the list
+                    if not attr_array[1]:
+                        attr_array[5] = [norm_reach]
+                    else:
+                        attr_array[5].append(norm_reach)
 
                     # We convert each lobe value into an int
                     lobe = int(record[6].strip())

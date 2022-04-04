@@ -62,7 +62,22 @@ if __name__ == '__main__':
 
                 # For each record with normalized values, we determine which class it belongs to
                 for record in all_records:
-                    print(record)
+                    if record[3] <= 10:
+                        if record[2] <= 4:
+                            write_data.writerow(['1'])
+                        else:
+                            if record[0] <= 40:
+                                if record[1] <= 136:
+                                    write_data.writerow(['1'])
+                                else:
+                                    write_data.writerow(['-1'])
+                            else:
+                                if record[3] <= 8:
+                                    write_data.writerow(['-1'])
+                                else:
+                                    write_data.writerow(['-1'])
+                    else:
+                        write_data.writerow(['1'])
 
             csv_file.close()
             output_file.close()

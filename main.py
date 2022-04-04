@@ -3,9 +3,9 @@ import csv
 import math
 import sys
 
-
-all_splits = [[]] * 10  # A list of all the splits (attribute and threshold) that happens within the ideal decision tree
-attr_array = [[]] * 6  # A list of lists of all the attributes that are relevant for the given data
+all_splits = []  # A list of all the splits (attribute and threshold) that happens within the ideal decision tree
+attr_array = []  # A list of lists of all the attributes that are relevant for the given data
+total_depth = 0  # The total amount of levels for the decision tree
 
 
 # This function will determine the entropy of a set of records.
@@ -109,14 +109,24 @@ def more_percent(set_of_records):
 #
 # argument 1 (the_records) - the set of records that we need to analyze and gather info from
 # argument 2 (depth) - the depth of the current node out of the entire decision tree
-def best_split(the_records, depth):
+# argument 2 (index_split) - the index of the decision tree level that we append some info into
+def best_split(the_records, depth, index_split):
     major_class = more_class(the_records)  # The class that appears more frequently in the records
     major_percent = more_percent(the_records)  # The percentage of the major_class
+    global total_depth
 
-    # If the decision tree is greater than 10 levels, or there are less than 9 records, or if the percentage
+    # Update the global max depth if the local depth is greater than it
+    if depth + 1 > total_depth:
+        total_depth = depth + 1
+
+    # If the decision tree already has 9 levels, or there are less than 9 records, or if the percentage
     # of the majority class is greater than 95 percent, we will stop splitting
-    if depth > 9 or len(the_records) < 9 or major_percent > 0.95:
-        return major_class
+    if depth > 10 or len(the_records) < 9 or major_percent > 0.95:
+
+        # If the stopping criteria is met, we let the program know there is no need to split anymore
+        all_splits[depth][index_split] = [0, 0, major_class]
+
+        return
     else:
         best_attribute = 0  # We initialize the best attribute to be the age
         best_threshold = min(attr_array[0])  # We initialize the best attribute to be the min threshold of age
@@ -176,19 +186,17 @@ def best_split(the_records, depth):
 
     # We append the best attribute, threshold, and the class that appears the most to the global list
     # for the classifier program
-    if not all_splits[depth]:
-        all_splits[depth] = [[best_attribute, best_threshold, major_class]]
-    else:
-        all_splits[depth].append([best_attribute, best_threshold, major_class])
+    all_splits[depth][index_split] = [best_attribute, best_threshold, major_class]
 
-    best_split(split1, depth + 1)  # Perform a recursive call using the first split and an increased depth
-    best_split(split2, depth + 1)  # Perform a recursive call using the second split and an increased depth
+    best_split(split1, depth + 1, index_split * 2)  # Perform a recursive call using the first split
+    best_split(split2, depth + 1, (index_split * 2) + 1)  # Perform a recursive call using the second split
 
 
 # This function will build a trained program (a python file called 'HW05_Classifier_Hu.py') which will
 # utilize the decision tree built by best_split in order to determine which class each record of a csv
 # file falls into.
 def write_trained_program():
+    print(total_depth)
     mentee_program = open("HW05_Classifier_Hu.py", "w")
     mentee_program.write("import csv\n")
     mentee_program.write("import sys\n")
@@ -259,19 +267,1487 @@ def write_trained_program():
     mentee_program.write("                # For each record with normalized values, we determine which class it "
                          "belongs to\n")
     mentee_program.write("                for record in all_records:\n")
-    mentee_program.write("                    print(record)\n")
-    # mentee_program.write("                    # If the normalized age is less than the number specified, it will "
-    #                      "belong in the Assam class\n")
-    # mentee_program.write("                    if rounded_num <= " + str(all_splits[0][0][1]) + ":\n")
-    # mentee_program.write("                        row.append('+1')\n")
-    # mentee_program.write("                        write_data.writerow(row)\n")
-    # mentee_program.write("\n")
-    # mentee_program.write("                    # If the normalized age is greater than the number specified, it "
-    #                      "will belong in the Bhutan\n")
-    # mentee_program.write("                    # class instead\n")
-    # mentee_program.write("                    else:\n")
-    # mentee_program.write("                        row.append('-1')\n")
-    # mentee_program.write("                        write_data.writerow(row)\n")
+
+    # This is if the decision tree is only 1 level deep
+    if total_depth == 1:
+        mentee_program.write("write_data.writerow(['" + str(all_splits[0][0][2]) + "'])\n")
+
+    # This is if the decision tree is 2 levels deep
+    elif total_depth == 2:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+        mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+        mentee_program.write("                    else:\n")
+        mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+    # This is if the decision tree is 3 levels deep
+    elif total_depth == 3:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+            # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+            mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                 "'])\n")
+            mentee_program.write("                        else:\n")
+            mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                 "'])\n")
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+            mentee_program.write(
+                "                            write_data.writerow(['" + str(all_splits[2][2][2]) + "'])\n")
+            mentee_program.write("                        else:\n")
+            mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                 "'])\n")
+
+    # This is if the decision tree is 4 levels deep
+    elif total_depth == 4:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+            # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][0][2]) + "'])\n")
+                mentee_program.write("                            else:\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][1][2]) + "'])\n")
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][2][2]) + "'])\n")
+                mentee_program.write("                            else:\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][3][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+            # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][5][2]) + "'])\n")
+                mentee_program.write("                            else:\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][6][2]) + "'])\n")
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][6][2]) + "'])\n")
+                mentee_program.write("                            else:\n")
+                mentee_program.write("                                write_data.writerow(['" +
+                                     str(all_splits[3][7][2]) + "'])\n")
+
+    # This is if the decision tree is 5 levels deep
+    elif total_depth == 5:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 6 levels deep
+    elif total_depth == 6:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 7 levels deep
+    elif total_depth == 7:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 8 levels deep
+    elif total_depth == 8:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 9 levels deep
+    elif total_depth == 9:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 10 levels deep
+    elif total_depth == 10:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
+    # This is if the decision tree is 11 levels deep
+    elif total_depth == 11:
+        mentee_program.write("                    if record[" + str(all_splits[0][0][0]) + "] <= " +
+                             str(all_splits[0][0][1]) + ":\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][0][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][0][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][0][0]) + "] <= " +
+                                 str(all_splits[1][0][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][0][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][0][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][0][0]) + "] <= " +
+                                     str(all_splits[2][0][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][0][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][0][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][0][0]) +
+                                         "] <= " + str(all_splits[3][0][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][0][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][1][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][1][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][1][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][1][0]) +
+                                         "] <= " + str(all_splits[3][1][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][2][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][3][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][1][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][1][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][1][0]) + "] <= " +
+                                     str(all_splits[2][1][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][2][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][2][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][2][0]) +
+                                         "] <= " + str(all_splits[3][2][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][4][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][5][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][3][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][3][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][3][0]) +
+                                         "] <= " + str(all_splits[3][3][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][6][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][7][2]) + "'])\n")
+
+        mentee_program.write("                    else:\n")
+
+        # If the stopping criteria has been met, we just return whatever majority class exists for this node
+        if all_splits[1][1][1] == 0:
+            mentee_program.write("                        write_data.writerow(['" + str(all_splits[1][1][2]) + "'])\n")
+
+        # Otherwise, we utilize the best attribute and the best threshold
+        else:
+            mentee_program.write("                        if record[" + str(all_splits[1][1][0]) + "] <= " +
+                                 str(all_splits[1][1][1]) + ":\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][2][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][2][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][2][0]) + "] <= " +
+                                     str(all_splits[2][2][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][4][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][4][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][4][0]) +
+                                         "] <= " + str(all_splits[3][4][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][8][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][9][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][5][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][5][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][5][0]) +
+                                         "] <= " + str(all_splits[3][5][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][10][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][11][2]) + "'])\n")
+
+            mentee_program.write("                        else:\n")
+
+            # If the stopping criteria has been met, we just return whatever majority class exists for this node
+            if all_splits[2][3][1] == 0:
+                mentee_program.write("                            write_data.writerow(['" + str(all_splits[2][3][2]) +
+                                     "'])\n")
+
+            else:
+                mentee_program.write("                            if record[" + str(all_splits[2][3][0]) + "] <= " +
+                                     str(all_splits[2][3][1]) + ":\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][6][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][6][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][6][0]) +
+                                         "] <= " + str(all_splits[3][6][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][12][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][13][2]) + "'])\n")
+
+                mentee_program.write("                            else:\n")
+
+                # If the stopping criteria has been met, we just return whatever majority class exists for this node
+                if all_splits[3][7][1] == 0:
+                    mentee_program.write("                                write_data.writerow(['" +
+                                         str(all_splits[3][7][2]) + "'])\n")
+
+                # Otherwise, we utilize the best attribute and the best threshold
+                else:
+                    mentee_program.write("                                if record[" + str(all_splits[3][7][0]) +
+                                         "] <= " + str(all_splits[3][7][1]) + ":\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][14][2]) + "'])\n")
+                    mentee_program.write("                                else:\n")
+                    mentee_program.write("                                    write_data.writerow(['" +
+                                         str(all_splits[4][15][2]) + "'])\n")
+
     mentee_program.write("\n")
     mentee_program.write("            csv_file.close()\n")
     mentee_program.write("            output_file.close()\n")
@@ -296,7 +1772,21 @@ if __name__ == '__main__':
                 read_data = csv.reader(csv_file)
                 read_data.__next__()  # We ignore the headers
                 records = []  # A list of all the records in the training data set
-                all_splits = [[]] * 10  # Initialize the global list of splits to an empty array
+                level1 = [[0, 0, 0]]
+                level2 = [[0, 0, 0]] * 2
+                level3 = [[0, 0, 0]] * 4
+                level4 = [[0, 0, 0]] * 8
+                level5 = [[0, 0, 0]] * 16
+                level6 = [[0, 0, 0]] * 32
+                level7 = [[0, 0, 0]] * 64
+                level8 = [[0, 0, 0]] * 128
+                level9 = [[0, 0, 0]] * 256
+                level10 = [[0, 0, 0]] * 512
+                level11 = [[0, 0, 0]] * 1024
+                total_depth = 0
+
+                # Initialize the global list of splits to an empty array
+                all_splits = [level1, level2, level3, level4, level5, level6, level7, level8, level9, level10, level11]
                 attr_array = [[]] * 6  # Initialize all arrays to an empty array
 
                 # Add each value of a record to a local list
@@ -371,7 +1861,20 @@ if __name__ == '__main__':
                     records.append(this_record)  # We add the normalized record to the record list
 
                 # Runs the recursive function to find best ways to split
-                best_split(records, 0)
+                best_split(records, 0, 0)
+
+                # Prints out all levels of the decision tree so we know where we are splitting and where we aren't
+                print(all_splits[0])
+                print(all_splits[1])
+                print(all_splits[2])
+                print(all_splits[3])
+                print(all_splits[4])
+                print(all_splits[5])
+                print(all_splits[6])
+                print(all_splits[7])
+                print(all_splits[8])
+                print(all_splits[9])
+                print(all_splits[10])
 
                 # Write a new trained program utilizing the results from best_split
                 write_trained_program()
